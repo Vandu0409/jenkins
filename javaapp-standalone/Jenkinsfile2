@@ -1,0 +1,68 @@
+pipeline {
+    agent { label 'docker-agent' }
+
+    environment {
+        APP_NAME = "myapp"
+        PORT = "5000"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'master', url: 'https://github.com/Vandu0409/jenkins.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                dir('javaapp-standalone') {
+                    sh 'mvn clean package -DskipTests'
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                dir('javaapp-standalone') {
+                    sh 'mvn test'
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                dir('javaapp-standalone') {
+                    sh "docker build -t ${APP_NAME}:latest ."
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                script {
+                    // stop old container if running
+                    sh """
+                    if [ \$(docker ps -aq -f name=${APP_NAME}) ]; then
+                        docker stop ${APP_NAME} || true
+                        docker rm ${APP_NAME} || true
+                    fi
+                    """
+
+                    // run new container
+                    sh "docker run -d --name ${APP_NAME} -p ${PORT}:${PORT} ${APP_NAME}:latest"
+
+                    // get public IP for info
+                    def PUBLIC_IP = sh(
+                        script: "curl -s http://checkip.amazonaws.com",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "==================================================="
+                    echo "✅ Application deployed successfully!"
+                    echo "🌐 Access it here: http://${PUBLIC_IP}:${PORT}"
+                    echo "==================================================="
+                }
+            }
+        }
+    }
+}
