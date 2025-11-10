@@ -11,6 +11,13 @@ pipeline {
   }
 
   stages {
+    stage('Checkout Code') {
+      steps {
+        git branch: 'master',
+            credentialsId: 'github-cred',
+            url: 'https://github.com/Vandu0409/jenkins.git'
+      }
+    }
 
     stage('Connect to EKS') {
       steps {
