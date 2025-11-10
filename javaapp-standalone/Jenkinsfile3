@@ -1,0 +1,86 @@
+pipeline {
+  agent any
+
+  environment {
+    // Replace with your values
+    REGISTRY = "docker.io/your-org"     // e.g. docker.io/myorg or 123456789012.dkr.ecr.us-east-1.amazonaws.com/myrepo
+    IMAGE_NAME = "${env.REGISTRY}/my-java-app"
+    CHART_DIR = "chart/my-java-app"
+    HELM_RELEASE = "my-java-app-release"
+    K8S_NAMESPACE = "default"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Build (Maven)') {
+      steps {
+        sh 'mvn -B -DskipTests package'
+      }
+    }
+
+    stage('Build Docker Image') {
+      steps {
+        script {
+          // Using git commit SHA for tag; fallback to BUILD_NUMBER
+          def imgTag = sh(script: "git rev-parse --short HEAD || echo ${env.BUILD_NUMBER}", returnStdout: true).trim()
+          env.IMAGE_TAG = imgTag
+        }
+        withCredentials([usernamePassword(credentialsId: 'docker-registry-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+          sh '''
+            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin ${REGISTRY%%/*}
+            docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
+            docker push ${IMAGE_NAME}:${IMAGE_TAG}
+            docker logout ${REGISTRY%%/*}
+          '''
+        }
+      }
+    }
+
+    stage('Deploy with Helm') {
+      steps {
+        // Use kubeconfig file credential to talk to cluster
+        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
+          sh '''
+            export KUBECONFIG=${KUBECONFIG_FILE}
+            # Optionally create namespace
+            kubectl get namespace ${K8S_NAMESPACE} || kubectl create namespace ${K8S_NAMESPACE}
+
+            # Update the image tag in values via --set (or use a values file)
+            helm upgrade --install ${HELM_RELEASE} ${CHART_DIR} \
+              --namespace ${K8S_NAMESPACE} \
+              --set image.repository=${IMAGE_NAME} \
+              --set image.tag=${IMAGE_TAG} \
+              --wait --timeout 5m
+          '''
+        }
+      }
+    }
+
+    stage('Smoke Test') {
+      steps {
+        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG_FILE')]) {
+          sh '''
+            export KUBECONFIG=${KUBECONFIG_FILE}
+            kubectl rollout status deployment/${HELM_RELEASE}-my-java-app -n ${K8S_NAMESPACE} --timeout=120s || true
+            # optional: curl internal service to validate (if cluster reachable)
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    failure {
+      echo "Pipeline failed. Check logs."
+    }
+    success {
+      echo "Deployed ${IMAGE_NAME}:${IMAGE_TAG} to ${K8S_NAMESPACE}"
+      echo "Ingress host: update DNS to point to your ingress controller external IP for the host defined in values.yaml"
+    }
+  }
+}
