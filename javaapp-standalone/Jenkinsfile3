@@ -16,17 +16,17 @@ tools {
 
   stages {
     stage('Checkout') {
-  steps {
-    checkout([$class: 'GitSCM',
-      branches: [[name: '*/master']],
-      extensions: [[$class: 'GitTool', gitTool: 'Default']],  // 👈 this line is key
-      userRemoteConfigs: [[
-        url: 'https://github.com/Vandu0409/jenkins.git',
-        credentialsId: 'github-cred'
-      ]]
-    ])
-  }
-}
+      steps {
+        checkout([$class: 'GitSCM',
+          branches: [[name: '*/master']],
+          extensions: [[$class: 'GitTool', gitTool: 'Default']],
+          userRemoteConfigs: [[
+            url: 'https://github.com/Vandu0409/jenkins.git',
+            credentialsId: 'github-cred'
+          ]]
+        ])
+      }
+    }
 
 
     stage('Connect to EKS') {
