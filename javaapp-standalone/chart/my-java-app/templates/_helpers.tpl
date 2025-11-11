@@ -22,8 +22,18 @@ Create a default fully qualified app name.
 {{- end -}}
 
 {{/*
-Chart label helper.
+Return the chart name and version for labelling.
 */}}
 {{- define "my-java-app.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Common labels used across all resources.
+*/}}
+{{- define "my-java-app.labels" -}}
+app.kubernetes.io/name: {{ include "my-java-app.name" . }}
+helm.sh/chart: {{ include "my-java-app.chart" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
