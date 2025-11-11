@@ -9,10 +9,10 @@ pipeline {
    
     stages {
         stage('Cloning Git') {
-            steps {
-                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '', url: 'git 'https://github.com/Vandu0409/jenkins.git']]])     
-            }
-        }
+    steps {
+        git branch: 'master', url: 'https://github.com/Vandu0409/jenkins.git'
+    }
+}
       stage ('Build') {
           steps {
             sh 'mvn clean install'           
