@@ -1,8 +1,8 @@
 replicaCount: 2
 
 image:
-  repository: vandana/my-java-app
-  tag: "latest"
+  repository: 905418283021.dkr.ecr.ap-south-1.amazonaws.com/my-docker-repo
+  tag: ""
   pullPolicy: IfNotPresent
   # imagePullSecrets: ["regcred"]   # Uncomment if using private Docker Hub repo
 
