@@ -68,11 +68,12 @@ pipeline {
                     """
 
                     // Deploy Helm chart with latest image tag
-                    sh """
-                    helm upgrade --install mychart ./mychart \
-                      --namespace ${NAMESPACE} \
-                      --set image.repository=${REGISTRY} \
-                      --set image.tag=${IMAGE_TAG}
+                   sh """
+                        helm upgrade --install my-java-app ./javaapp-standalone/chart/my-java-app \
+                          --namespace ${NAMESPACE} \
+                          --create-namespace \
+                          --set image.repository=${REGISTRY} \
+                          --set image.tag=${IMAGE_TAG}
                     """
                 }
             }
