@@ -51,8 +51,8 @@ ingress:
   annotations:
     kubernetes.io/ingress.class: nginx
   hosts:
-    - host: my-java-app.example.com    # Replace this with your actual DNS or ingress host
-      paths:
-        - path: /
-          pathType: Prefix
+  - host: a41f2251e6e074755ba767edb9eab02e-884550417.ap-south-1.elb.amazonaws.com
+    paths:
+      - path: /
+        pathType: Prefix
   tls: []  # Optional, add cert-manager or ACM configuration here
