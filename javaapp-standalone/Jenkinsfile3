@@ -1,91 +1,48 @@
 pipeline {
-  agent any
-
-  environment {
-    AWS_REGION = "ap-south-1"
-    CLUSTER_NAME = "education-eks-HDxqSq"
-    CHART_DIR = "chart/my-java-app"
-    RELEASE_NAME = "my-java-app"
-    IMAGE_REPO = "vandu0409/my-java-app"
-    IMAGE_TAG = "latest"
-  }
-
-tools {
-    git 'Default'   // matches the name in Manage Jenkins → Tools
-  }
-
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout([$class: 'GitSCM',
-          branches: [[name: '*/master']],
-          extensions: [[$class: 'GitTool', gitTool: 'Default']],
-          userRemoteConfigs: [[
-            url: 'https://github.com/Vandu0409/jenkins.git',
-            credentialsId: 'github-cred'
-          ]]
-        ])
-      }
+   tools {
+        maven 'Maven3'
     }
-
-
-    stage('Connect to EKS') {
-      steps {
+    agent any
+    environment {
+        registry = "905418283021.dkr.ecr.ap-south-1.amazonaws.com/my-docker-repo"
+    }
+   
+    stages {
+        stage('Cloning Git') {
+            steps {
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '', url: 'git 'https://github.com/Vandu0409/jenkins.git']]])     
+            }
+        }
+      stage ('Build') {
+          steps {
+            sh 'mvn clean install'           
+            }
+      }
+    // Building Docker images
+    stage('Building image') {
+      steps{
         script {
-          echo "Connecting to EKS Cluster: ${CLUSTER_NAME} in ${AWS_REGION}"
-
-          // Use either IAM Role (EC2) or AWS creds
-          withAWS(credentials: 'aws-creds', region: "${AWS_REGION}") {
-            sh '''
-              aws eks update-kubeconfig --region $AWS_REGION --name $CLUSTER_NAME
-              kubectl get nodes
-            '''
-          }
+          dockerImage = docker.build registry 
+          dockerImage.tag("$BUILD_NUMBER")
         }
       }
     }
-
-    stage('Build Docker Image') {
-      steps {
-        sh '''
-          docker build -t ${IMAGE_REPO}:${IMAGE_TAG} .
-        '''
-      }
-    }
-
-    stage('Push Docker Image') {
-      steps {
-        withCredentials([usernamePassword(credentialsId: 'docker-registry-cred', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-          sh '''
-            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-            docker push ${IMAGE_REPO}:${IMAGE_TAG}
-          '''
+   
+    // Uploading Docker images into AWS ECR
+    stage('Pushing to ECR') {
+     steps{  
+         script {
+                sh 'aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 905418283021.dkr.ecr.us-east-1.amazonaws.com'
+                sh 'docker push 905418283021.dkr.ecr.us-east-1.amazonaws.com/my-docker-repo:$BUILD_NUMBER'
+         }
         }
       }
-    }
-
-    stage('Deploy to EKS with Helm') {
-      steps {
-        script {
-          sh '''
-            helm upgrade --install ${RELEASE_NAME} ${CHART_DIR} \
-              --set image.repository=${IMAGE_REPO} \
-              --set image.tag=${IMAGE_TAG} \
-              --set service.port=5000 \
-              --set service.targetPort=5000 \
-              --namespace default --create-namespace --wait --timeout 5m
-          '''
+        stage ('Helm Deploy') {
+          steps {
+            script {
+                sh "helm upgrade first --install mychart --namespace helm-deployment --set image.tag=$BUILD_NUMBER"
+                }
+            }
         }
-      }
     }
-
-    stage('Verify Deployment') {
-      steps {
-        sh '''
-          kubectl get pods -n default
-          kubectl get svc -n default
-        '''
-      }
-    }
-  }
 }
