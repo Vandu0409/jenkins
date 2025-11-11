@@ -3,6 +3,11 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "my-java-app.fullname" . }}-ingress
+  labels:
+    app: {{ include "my-java-app.name" . }}
+    chart: {{ include "my-java-app.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
   annotations:
     {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
@@ -21,7 +26,7 @@ spec:
             pathType: {{ .pathType | default "Prefix" }}
             backend:
               service:
-                name: {{ include "my-java-app.fullname" $. }}
+                name: {{ include "my-java-app.fullname" $ }}
                 port:
                   number: {{ $.Values.service.port }}
           {{- end }}
