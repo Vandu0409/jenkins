@@ -7,17 +7,21 @@ pipeline {
         REPO_NAME = 'my-docker-repo'
         REGISTRY = "${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${REPO_NAME}"
         IMAGE_TAG = "${BUILD_NUMBER}"
+        CLUSTER_NAME = 'demo-eks'
+        NAMESPACE = 'helm-deployment'
     }
 
     stages {
 
+        // --- Stage 1: Clone your Git repo ---
         stage('Cloning Git') {
             steps {
                 git branch: 'master', url: 'https://github.com/Vandu0409/jenkins.git'
             }
         }
 
-        stage('Build') {
+        // --- Stage 2: Build Java app ---
+        stage('Build Maven Project') {
             steps {
                 dir('javaapp-standalone') {
                     sh 'mvn clean install'
@@ -25,44 +29,62 @@ pipeline {
             }
         }
 
+        // --- Stage 3: Build Docker image ---
         stage('Build Docker Image') {
             steps {
-               dir('javaapp-standalone') {
-                script {
-                    // Use the Dockerfile from project root or app folder
-                    dockerImage = docker.build("${REGISTRY}:${IMAGE_TAG}", ".")
+                dir('javaapp-standalone') {
+                    script {
+                        dockerImage = docker.build("${REGISTRY}:${IMAGE_TAG}", ".")
+                    }
                 }
-               }
             }
         }
 
+        // --- Stage 4: Push Docker image to AWS ECR ---
         stage('Push to ECR') {
             steps {
                 script {
-                    // ECR login and push using correct region
                     sh """
-                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                    aws ecr get-login-password --region ${AWS_REGION} \
+                    | docker login --username AWS --password-stdin ${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
                     docker push ${REGISTRY}:${IMAGE_TAG}
                     """
                 }
             }
         }
 
+        // --- Stage 5: Deploy to EKS via Helm ---
         stage('Helm Deploy') {
             steps {
                 script {
+                    // Update kubeconfig (ensures Jenkins can talk to cluster)
+                    sh """
+                    aws eks update-kubeconfig --region ${AWS_REGION} --name ${CLUSTER_NAME}
+                    """
+
                     // Ensure namespace exists
-                    sh "kubectl create namespace helm-deployment --dry-run=client -o yaml | kubectl apply -f -"
-                    
-                    // Deploy Helm chart with updated image tag
+                    sh """
+                    kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                    """
+
+                    // Deploy Helm chart with latest image tag
                     sh """
                     helm upgrade --install mychart ./mychart \
-                      --namespace helm-deployment \
+                      --namespace ${NAMESPACE} \
                       --set image.repository=${REGISTRY} \
                       --set image.tag=${IMAGE_TAG}
                     """
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ Deployment successful! App deployed to EKS cluster: ${CLUSTER_NAME}"
+        }
+        failure {
+            echo "❌ Pipeline failed. Please check the Jenkins logs."
         }
     }
 }
