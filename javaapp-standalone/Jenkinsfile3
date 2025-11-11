@@ -30,7 +30,7 @@ pipeline {
                dir('javaapp-standalone') {
                 script {
                     // Use the Dockerfile from project root or app folder
-                    dockerImage = docker.build("${REGISTRY}:${IMAGE_TAG}", "./javaapp-standalone")
+                    dockerImage = docker.build("${REGISTRY}:${IMAGE_TAG}", ".")
                 }
                }
             }
