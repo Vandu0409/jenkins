@@ -1,7 +1,5 @@
 pipeline {
-   tools {
-        maven 'Maven3'
-    }
+   
     agent any
     environment {
         registry = "905418283021.dkr.ecr.ap-south-1.amazonaws.com/my-docker-repo"
