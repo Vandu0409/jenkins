@@ -29,35 +29,33 @@ spec:
 
   - name: maven
     image: maven:3.9.6-eclipse-temurin-21
-    command: ["cat"]
-    tty: true
+    command: ["sleep"]
+    args: ["999999"]
     volumeMounts:
     - name: workspace
       mountPath: /home/jenkins/agent
 
   - name: kaniko
-    image: gcr.io/kaniko-project/executor:v1.9.1-debug
+    image: gcr.io/kaniko-project/executor:v1.9.0-debug
     command: ["/busybox/sleep"]
     args: ["999999"]
-    tty: true
     volumeMounts:
-    - name: docker-config
-      mountPath: /kaniko/.docker/
     - name: workspace
       mountPath: /home/jenkins/agent
+    - name: docker-config
+      mountPath: /kaniko/.docker/
 
   - name: helm
     image: alpine/helm:3.11.2
-    command: ["cat"]
-    tty: true
+    command: ["sleep"]
+    args: ["999999"]
     volumeMounts:
     - name: workspace
       mountPath: /home/jenkins/agent
 
   - name: jnlp
-    image: jenkins/inbound-agent:latest
+    image: jenkins/inbound-agent:3345.v03dee9b_f88fc-1
     args: ["-workDir=/home/jenkins/agent"]
-    tty: true
     volumeMounts:
     - name: workspace
       mountPath: /home/jenkins/agent
@@ -76,11 +74,14 @@ spec:
             }
 
             stages {
+
                 stage("Clone Repo") {
                     steps {
                         container("maven") {
                             sh """
-                                git clone --branch ${GIT_BRANCH} ${GIT_URL} src
+                                cd /home/jenkins/agent
+                                git clone --branch ${GIT_BRANCH} ${GIT_URL} repo
+                                ls -l repo
                             """
                         }
                     }
@@ -90,8 +91,9 @@ spec:
                     steps {
                         container("maven") {
                             sh """
-                                cd src/javaapp-standalone
+                                cd /home/jenkins/agent/repo/javaapp-standalone
                                 mvn -Dmaven.test.skip=true clean package
+                                ls -l target
                             """
                         }
                     }
@@ -102,9 +104,10 @@ spec:
                         container("kaniko") {
                             sh """
                                 /kaniko/executor \
-                                  --dockerfile=src/javaapp-standalone/Dockerfile \
-                                  --context=/home/jenkins/agent/workspace/${JOB_NAME}/src/javaapp-standalone \
-                                  --destination=${FULL_IMAGE}
+                                  --dockerfile=/home/jenkins/agent/repo/javaapp-standalone/Dockerfile \
+                                  --context=/home/jenkins/agent/repo/javaapp-standalone \
+                                  --destination=${FULL_IMAGE} \
+                                  --single-snapshot
                             """
                         }
                     }
@@ -114,7 +117,8 @@ spec:
                     steps {
                         container("helm") {
                             sh """
-                                helm upgrade --install ${RELEASE_NAME} src/javaapp-standalone/chart/my-java-app \
+                                helm upgrade --install ${RELEASE_NAME} \
+                                  /home/jenkins/agent/repo/javaapp-standalone/chart/my-java-app \
                                   --namespace ${K8S_NAMESPACE} \
                                   --set image.repository=docker.io/${IMAGE_REPO} \
                                   --set image.tag=${IMAGE_TAG}
