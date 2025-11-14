@@ -102,19 +102,19 @@ spec:
                 }
 
                 stage("Build Docker Image (Kaniko)") {
-                    steps {
-                        container("kaniko") {
-                            sh """
-                                /kaniko/executor \
-                                  --dockerfile=/home/jenkins/agent/repo/javaapp-standalone/Dockerfile \
-                                  --context=/home/jenkins/agent/repo/javaapp-standalone \
-                                  --destination=${FULL_IMAGE} \
-                                  --single-snapshot
-                            """
-                        }
-                    }
-                }
-
+                        steps {
+        container("kaniko") {
+            sh """
+                /kaniko/executor \
+                  --dockerfile=/home/jenkins/agent/repo/javaapp-standalone/Dockerfile \
+                  --context=/home/jenkins/agent/repo/javaapp-standalone \
+                  --destination=${FULL_IMAGE} \
+                  --docker-config=/kaniko/.docker/ \
+                  --single-snapshot
+            """
+        }
+    }
+}
                 stage("Deploy to Kubernetes") {
                     steps {
                         container("helm") {
