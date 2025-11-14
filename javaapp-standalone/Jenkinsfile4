@@ -27,7 +27,7 @@ spec:
   serviceAccountName: jenkins-admin
   containers:
 
-  # ---------------- MAVEN ----------------
+ 
   - name: maven
     image: maven:3.9.6-eclipse-temurin-21
     command: ["sleep"]
@@ -36,7 +36,7 @@ spec:
     - name: workspace
       mountPath: /home/jenkins/agent
 
-  # ---------------- KANIKO ----------------
+
   - name: kaniko
     image: gcr.io/kaniko-project/executor:v1.9.0-debug
     command: ["/busybox/sleep"]
@@ -50,7 +50,7 @@ spec:
     - name: docker-config
       mountPath: /kaniko/.docker/
 
-  # ---------------- HELM ----------------
+  
   - name: helm
     image: alpine/helm:3.11.2
     command: ["sleep"]
@@ -59,7 +59,7 @@ spec:
     - name: workspace
       mountPath: /home/jenkins/agent
 
-  # ---------------- JNLP ----------------
+ 
   - name: jnlp
     image: jenkins/inbound-agent:latest
     volumeMounts:
@@ -81,7 +81,7 @@ spec:
 
             stages {
 
-                # ----------- CLONE REPO -----------
+               
                 stage("Clone Repo") {
                     steps {
                         container("maven") {
@@ -94,7 +94,7 @@ spec:
                     }
                 }
 
-                # ----------- MAVEN BUILD -----------
+              
                 stage("Build JAR") {
                     steps {
                         container("maven") {
@@ -107,7 +107,7 @@ spec:
                     }
                 }
 
-                # ----------- KANIKO BUILD + PUSH -----------
+              
                 stage("Build Docker Image (Kaniko)") {
                     steps {
                         container("kaniko") {
@@ -122,7 +122,7 @@ spec:
                     }
                 }
 
-                # ----------- HELM DEPLOY -----------
+               
                 stage("Deploy to Kubernetes") {
                     steps {
                         container("helm") {
