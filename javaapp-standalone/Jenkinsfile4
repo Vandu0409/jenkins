@@ -75,17 +75,18 @@ spec:
 
             stages {
 
-                stage("Clone Repo") {
-                    steps {
-                        container("maven") {
-                            sh """
-                                cd /home/jenkins/agent
-                                git clone --branch ${GIT_BRANCH} ${GIT_URL} repo
-                                ls -l repo
-                            """
-                        }
-                    }
-                }
+             stage("Clone Repo") {
+    steps {
+        container("maven") {
+            sh """
+                cd /home/jenkins/agent
+                git clone --branch k8s-jenkins https://github.com/Vandu0409/jenkins.git repo
+                ls -l repo
+            """
+        }
+    }
+}
+
 
                 stage("Build JAR") {
                     steps {
