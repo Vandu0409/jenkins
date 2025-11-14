@@ -1,0 +1,10 @@
+1. To upgrade / install:
+   helm upgrade --install javaapp ./my-java-app -n javaapp --create-namespace \
+     --set image.tag=<TAG>
+
+2. To see service:
+   kubectl get svc -n javaapp
+
+3. To get app URL (if ALB/Ingress is used):
+   kubectl get ingress -n javaapp
+

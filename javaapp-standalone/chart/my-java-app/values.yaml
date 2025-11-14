@@ -1,58 +1,36 @@
 replicaCount: 2
 
 image:
-  repository: 905418283021.dkr.ecr.ap-south-1.amazonaws.com/my-docker-repo
-  tag: ""                # Jenkins will override this dynamically via --set image.tag
+  repository: 905418283021.dkr.ecr.ap-south-1.amazonaws.com/javaapp
+  tag: "latest"
   pullPolicy: IfNotPresent
-  # imagePullSecrets: ["regcred"]   # Uncomment if your repo requires auth (ECR handles this via IAM)
+  pullSecrets:   
+    - name: regcred
 
 service:
   type: ClusterIP
-  port: 5000
-  targetPort: 5000
-
-resources: {}
-# Example (optional):
-# resources:
-#   requests:
-#     cpu: 100m
-#     memory: 256Mi
-#   limits:
-#     cpu: 500m
-#     memory: 512Mi
-
-env: []
-# Example:
-# env:
-#   - name: SPRING_PROFILES_ACTIVE
-#     value: "prod"
-
-livenessProbe:
-  enabled: true
-  path: /
-  port: 5000
-  initialDelaySeconds: 30
-  periodSeconds: 10
-  timeoutSeconds: 5
-  failureThreshold: 3
-
-readinessProbe:
-  enabled: true
-  path: /
-  port: 5000
-  initialDelaySeconds: 10
-  periodSeconds: 5
-  timeoutSeconds: 3
-  failureThreshold: 3
+  port: 80
+  targetPort: 8080
 
 ingress:
   enabled: true
-  className: nginx
+  className: alb
   annotations:
-    kubernetes.io/ingress.class: nginx
-  hosts:
-  - host: a41f2251e6e074755ba767edb9eab02e-884550417.ap-south-1.elb.amazonaws.com
-    paths:
-      - path: /
-        pathType: Prefix
-  tls: []  # Optional, add cert-manager or ACM configuration here
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-south-1:905418283021:certificate/2aa7fd6f-8a09-4edc-8875-43bf4a044e08
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80,"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    hosts:
+    - host: javaapp.vandana-java.shop
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
