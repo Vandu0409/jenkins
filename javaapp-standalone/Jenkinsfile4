@@ -1,8 +1,26 @@
 pipeline {
+  agent none
 
-    agent {
+  // Prevent Jenkins from doing the automatic "Checkout SCM" step
+  options {
+    skipDefaultCheckout()
+  }
+
+  environment {
+    DOCKERHUB_USER = "vandu0409"
+    IMAGE_REPO     = "vandu0409/javaapp"
+    IMAGE_TAG      = "${BUILD_NUMBER}"
+
+    K8S_NAMESPACE  = "javaapp"
+    RELEASE_NAME   = "javaapp"
+  }
+
+  stages {
+
+    stage('Build, Build Image & Deploy (single pod)') {
+      agent {
         kubernetes {
-            yaml """
+          yaml """
 apiVersion: v1
 kind: Pod
 spec:
@@ -46,90 +64,79 @@ spec:
           path: config.json
 """
         }
-    }
+      }
 
-    environment {
-        DOCKERHUB_USER = "vandu0409"
-        IMAGE_REPO     = "vandu0409/javaapp"
-        IMAGE_TAG      = "${BUILD_NUMBER}"
-
-        K8S_NAMESPACE  = "javaapp"
-        RELEASE_NAME   = "javaapp"
-    }
-
-    stages {
-
-        /* ------------------------------------------
-               CHECKOUT CODE INSIDE BUILDER CONTAINER
-        --------------------------------------------*/
-        stage('Checkout Code') {
-            steps {
-                container('builder') {
-                    sh """
-                        rm -rf * .git
-                        git clone -b k8s-jenkins https://github.com/Vandu0409/jenkins.git .
-                        echo "📁 After Git Clone:"
-                        ls -l
-                    """
-                }
+      stages {
+        stage('Git clone inside builder') {
+          steps {
+            container('builder') {
+              // Use git clone here to force git to run inside the builder container
+              sh '''
+                set -eux
+                # ensure workspace is clean
+                rm -rf ./*
+                # clone the required branch into the pod workspace
+                git clone -b k8s-jenkins https://github.com/Vandu0409/jenkins.git .
+                echo "Repository contents:"
+                ls -la
+              '''
             }
+          }
         }
 
-        /* ------------------------------------------
-                     BUILD JAR
-        --------------------------------------------*/
         stage('Build JAR') {
-            steps {
-                container('builder') {
-                    sh """
-                        cd javaapp-standalone
-                        mvn clean package -DskipTests
-                        echo "📦 JAR Output:"
-                        ls -l target
-                    """
-                }
+          steps {
+            container('builder') {
+              sh '''
+                set -eux
+                cd javaapp-standalone
+                mvn clean package -DskipTests
+                echo "Target files:"
+                ls -la target || true
+              '''
             }
+          }
         }
 
-        /* ------------------------------------------
-                 BUILD DOCKER IMAGE USING KANIKO
-        --------------------------------------------*/
         stage('Build Docker Image (Kaniko)') {
-            steps {
-                container('kaniko') {
-                    sh """
-                        /kaniko/executor \
-                          --dockerfile=javaapp-standalone/Dockerfile \
-                          --context=`pwd` \
-                          --destination=docker.io/${IMAGE_REPO}:${IMAGE_TAG}
-                    """
-                }
+          steps {
+            container('kaniko') {
+              sh '''
+                set -eux
+                # Kaniko context should be the repo root (workspace) or specific folder
+                # we built the jar inside javaapp-standalone so use that folder as context
+                /kaniko/executor \
+                  --dockerfile=javaapp-standalone/Dockerfile \
+                  --context=$(pwd)/javaapp-standalone \
+                  --destination=docker.io/${IMAGE_REPO}:${IMAGE_TAG}
+              '''
             }
+          }
         }
 
-        /* ------------------------------------------
-                     DEPLOY USING HELM
-        -------------------------------------------- */
         stage('Deploy to Kubernetes via Helm') {
-            steps {
-                container('helm') {
-                    sh """
-                        helm upgrade --install ${RELEASE_NAME} javaapp-standalone/chart/my-java-app \
-                          --namespace ${K8S_NAMESPACE} \
-                          --set image.repository=docker.io/${IMAGE_REPO} \
-                          --set image.tag=${IMAGE_TAG}
-                    """
-                }
+          steps {
+            container('helm') {
+              sh '''
+                set -eux
+                helm upgrade --install ${RELEASE_NAME} javaapp-standalone/chart/my-java-app \
+                  --namespace ${K8S_NAMESPACE} \
+                  --set image.repository=docker.io/${IMAGE_REPO} \
+                  --set image.tag=${IMAGE_TAG}
+              '''
             }
+          }
         }
-    }
+      } // end inner stages
+    } // end top stage
+  } // end stages
 
-    post {
-        success {
-            echo "🎉 Deployment Successful! VERSION=${IMAGE_TAG}"
-        }
-        failure {
-            echo "❌ Deployment Failed. Check logs!"
-        }
+  post {
+    success {
+      echo "🎉 Deployment Successful! VERSION=${IMAGE_TAG}"
     }
+    failure {
+      echo "❌ Deployment Failed. Check logs!"
+    }
+  }
 }
