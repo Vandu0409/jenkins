@@ -1,5 +1,9 @@
 pipeline {
 
+  options {
+    skipDefaultCheckout()     // 🔥 IMPORTANT FIX
+  }
+
   agent {
     kubernetes {
       yaml """
@@ -60,6 +64,7 @@ spec:
         container('builder') {
           sh """
             echo "===== CLONING CODE INSIDE POD ====="
+            cd /home/jenkins/agent
             git clone -b k8s-jenkins https://github.com/Vandu0409/jenkins.git repo
             ls -la repo
           """
