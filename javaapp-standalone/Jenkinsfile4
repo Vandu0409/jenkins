@@ -8,7 +8,7 @@ kind: Pod
 spec:
   containers:
   - name: kaniko
-    image: gcr.io/kaniko-project/executor:debug
+    image: gcr.io/kaniko-project/executor:debug-v1.9.1
     command: ["/busybox/sleep"]
     args: ["999999"]
     tty: true
