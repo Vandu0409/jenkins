@@ -1,41 +1,14 @@
 pipeline {
 
-    agent {
-        kubernetes {
-            yaml """
-apiVersion: v1
-kind: Pod
-spec:
-  containers:
-  - name: kaniko
-    image: gcr.io/kaniko-project/executor:debug
-    imagePullPolicy: Always
-    command:
-    - sleep
-    args:
-    - "999999"
-    volumeMounts:
-    - name: docker-config
-      mountPath: /kaniko/.docker/
-  volumes:
-  - name: docker-config
-    projected:
-      sources:
-      - secret:
-          name: regcred
-          items:
-          - key: .dockerconfigjson
-            path: config.json
-"""
-        }
-    }
+    agent any
 
     environment {
-        DOCKER_REPO   = "vandu0409/javaapp"
-        IMAGE_TAG     = "${BUILD_NUMBER}"
+        DOCKERHUB_USER = "vandu0409"
+        IMAGE_REPO     = "vandu0409/javaapp"
+        IMAGE_TAG      = "${BUILD_NUMBER}"
 
-        K8S_NAMESPACE = "javaapp"
-        RELEASE_NAME  = "javaapp"
+        K8S_NAMESPACE  = "javaapp"
+        RELEASE_NAME   = "javaapp"
     }
 
     stages {
@@ -47,7 +20,7 @@ spec:
             }
         }
 
-        stage('Build Java App (Maven)') {
+        stage('Build Java App') {
             steps {
                 dir('javaapp-standalone') {
                     sh 'mvn clean package -DskipTests'
@@ -55,43 +28,68 @@ spec:
             }
         }
 
-        stage('Build & Push Docker Image with Kaniko') {
+        stage('Build Image with Kaniko') {
+            agent {
+                kubernetes {
+                    yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:debug
+    command:
+    - sleep
+    args:
+    - "999999"
+    volumeMounts:
+    - name: docker-config
+      mountPath: /kaniko/.docker/
+  volumes:
+  - name: docker-config
+    secret:
+      secretName: regcred
+      items:
+      - key: .dockerconfigjson
+        path: config.json
+"""
+                }
+            }
             steps {
                 container('kaniko') {
-                    sh '''
-                        /kaniko/executor \
-                          --context `pwd`/javaapp-standalone \
-                          --dockerfile `pwd`/javaapp-standalone/Dockerfile \
-                          --destination docker.io/vandu0409/javaapp:${IMAGE_TAG} \
-                          --skip-tls-verify \
-                          --verbosity info
-                    '''
+                    sh """
+                    /kaniko/executor \
+                      --dockerfile=javaapp-standalone/Dockerfile \
+                      --context=`pwd`/javaapp-standalone \
+                      --destination=docker.io/${IMAGE_REPO}:${IMAGE_TAG}
+                    """
                 }
             }
         }
 
         stage('Deploy to Kubernetes via Helm') {
             steps {
-                sh """
-                    # Create namespace if not found
-                    kubectl get ns ${K8S_NAMESPACE} || kubectl create ns ${K8S_NAMESPACE}
+                script {
 
-                    # Deploy with Helm using Docker Hub image
-                    helm upgrade --install ${RELEASE_NAME} ./javaapp-helm \
-                      --namespace ${K8S_NAMESPACE} \
-                      --set image.repository=docker.io/${DOCKER_REPO} \
-                      --set image.tag=${IMAGE_TAG}
-                """
+                    sh """
+                        kubectl get ns ${K8S_NAMESPACE} || kubectl create ns ${K8S_NAMESPACE}
+
+                        helm upgrade --install ${RELEASE_NAME} ./javaapp-helm \
+                          --namespace ${K8S_NAMESPACE} \
+                          --set image.repository=docker.io/${IMAGE_REPO} \
+                          --set image.tag=${IMAGE_TAG}
+                    """
+                }
             }
         }
     }
 
     post {
         success {
-            echo "‚úÖ Deployment Successful! App deployed with image tag ${IMAGE_TAG}"
+            echo "Ì∫Ä Deployment Successful! Version ${IMAGE_TAG}"
         }
         failure {
-            echo "‚ùå Deployment Failed. Check logs!"
+            echo "‚ùå Deployment failed. Check logs!"
         }
     }
 }

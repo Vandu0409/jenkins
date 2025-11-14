@@ -14,12 +14,20 @@ spec:
       labels:
         app: {{ include "my-java-app.fullname" . }}
     spec:
+
+      {{- if .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.image.pullSecrets | nindent 8 }}
+      {{- end }}
+
       containers:
         - name: {{ include "my-java-app.name" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+
           ports:
             - containerPort: {{ .Values.service.targetPort | default 8080 }}
+
           env:
             - name: APP_MESSAGE
               valueFrom:
@@ -31,27 +39,33 @@ spec:
                 secretKeyRef:
                   name: {{ include "my-java-app.fullname" . }}-secret
                   key: DB_PASSWORD
+
           readinessProbe:
             httpGet:
               path: /
               port: {{ .Values.service.targetPort | default 8080 }}
             initialDelaySeconds: 10
             periodSeconds: 5
+
           livenessProbe:
             httpGet:
               path: /
               port: {{ .Values.service.targetPort | default 8080 }}
             initialDelaySeconds: 30
             periodSeconds: 10
+
       {{- if .Values.nodeSelector }}
       nodeSelector:
-        {{ toYaml .Values.nodeSelector | nindent 8 }}
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
       {{- end }}
+
       {{- if .Values.affinity }}
       affinity:
-        {{ toYaml .Values.affinity | nindent 8 }}
+        {{- toYaml .Values.affinity | nindent 8 }}
       {{- end }}
+
       {{- if .Values.tolerations }}
       tolerations:
-        {{ toYaml .Values.tolerations | nindent 8 }}
+        {{- toYaml .Values.tolerations | nindent 8 }}
       {{- end }}
+
