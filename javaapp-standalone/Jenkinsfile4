@@ -1,119 +1,153 @@
 pipeline {
 
-    agent {
-        kubernetes {
-            yaml """
+    agent none
+
+    environment {
+        GIT_URL       = "https://github.com/Vandu0409/jenkins.git"
+        GIT_BRANCH    = "k8s-jenkins"
+
+        IMAGE_REPO    = "vandu0409/javaapp"
+        IMAGE_TAG     = "${BUILD_NUMBER}"
+        FULL_IMAGE    = "docker.io/${IMAGE_REPO}:${IMAGE_TAG}"
+
+        K8S_NAMESPACE = "javaapp"
+        RELEASE_NAME  = "javaapp"
+    }
+
+    stages {
+
+        /* -------------------------------------------------
+           SINGLE POD FOR BUILD + KANIKO + HELM
+           ------------------------------------------------- */
+        stage("Build + Image + Deploy (Single Pod)") {
+
+            agent {
+                kubernetes {
+                    yaml """
 apiVersion: v1
 kind: Pod
-metadata:
-  labels:
-    app: jenkins-cicd
 spec:
-  restartPolicy: Never
+  serviceAccountName: default
 
   containers:
 
   - name: maven
     image: maven:3.9.6-eclipse-temurin-21
-    command: ["cat"]
+    command: [ "cat" ]
     tty: true
     volumeMounts:
-      - name: workspace-volume
-        mountPath: /home/jenkins/agent
+    - name: workspace
+      mountPath: /home/jenkins/agent
 
   - name: kaniko
-    image: gcr.io/kaniko-project/executor:v1.16.0-debug
-    command: ["/busybox/sh"]
-    args: ["-c", "sleep 999999"]
+    image: gcr.io/kaniko-project/executor:v1.9.1-debug
+    command: [ "/busybox/sleep" ]
+    args: [ "999999" ]
     tty: true
     volumeMounts:
-      - name: workspace-volume
-        mountPath: /home/jenkins/agent
-      - name: docker-config
-        mountPath: /kaniko/.docker/
+    - name: docker-config
+      mountPath: /kaniko/.docker/
+    - name: workspace
+      mountPath: /home/jenkins/agent
 
   - name: helm
     image: alpine/helm:3.11.2
-    command: ["cat"]
+    command: [ "cat" ]
     tty: true
     volumeMounts:
-      - name: workspace-volume
-        mountPath: /home/jenkins/agent
+    - name: workspace
+      mountPath: /home/jenkins/agent
 
   - name: jnlp
     image: jenkins/inbound-agent:latest
-    env:
-      - name: JENKINS_URL
-        value: "http://jenkins.jenkins.svc.cluster.local:8080/"
+    args: [ "" ]
     tty: true
     volumeMounts:
-      - name: workspace-volume
-        mountPath: /home/jenkins/agent
+    - name: workspace
+      mountPath: /home/jenkins/agent
 
   volumes:
-    - name: workspace-volume
-      emptyDir: {}
+  - name: workspace
+    emptyDir: {}
+  - name: docker-config
+    secret:
+      secretName: regcred
+      items:
+      - key: .dockerconfigjson
+        path: config.json
 
-    - name: docker-config
-      secret:
-        secretName: regcred
-        items:
-          - key: .dockerconfigjson
-            path: config.json
 """
-        }
-    }
-
-    environment {
-        APP_NAME = "java-sample-app"
-        IMAGE = "vandana0409/java-sample-app:latest"
-    }
-
-    stages {
-
-        stage("Checkout") {
-            steps {
-                echo "📥 Checking out source code"
-                checkout scm
-            }
-        }
-
-        stage("Build JAR") {
-            steps {
-                container("maven") {
-                    sh """
-                        echo '===== Building JAR ====='
-                        mvn -Dmaven.test.skip=true clean package
-                    """
                 }
             }
-        }
 
-        stage("Build Docker Image (Kaniko)") {
-            steps {
-                container("kaniko") {
-                    sh """
-                        echo '===== Building Docker Image with Kaniko ====='
-                        /kaniko/executor \
-                            --dockerfile=Dockerfile \
-                            --context=/home/jenkins/agent/workspace/${JOB_NAME}/javaapp-standalone \
-                            --destination=${IMAGE} \
-                            --verbosity=info
-                    """
+            stages {
+
+                /* ------------------------------
+                   GIT CLONE (inside Maven container)
+                   ------------------------------ */
+                stage("Clone Repo") {
+                    steps {
+                        container("maven") {
+                            sh """
+                                echo '===== Cloning Repository ====='
+                                git clone --branch ${GIT_BRANCH} ${GIT_URL} src
+                                ls -la src
+                            """
+                        }
+                    }
                 }
-            }
-        }
 
-        stage("Deploy to Kubernetes") {
-            steps {
-                container("helm") {
-                    sh """
-                        echo '===== Deploying to EKS with Helm ====='
-                        helm upgrade --install ${APP_NAME} \
-                          javaapp-standalone/chart/my-java-app \
-                          --set image.repository=vandana0409/java-sample-app \
-                          --set image.tag=latest
-                    """
+                /* ------------------------------
+                   BUILD JAR
+                   ------------------------------ */
+                stage("Build JAR") {
+                    steps {
+                        container("maven") {
+                            sh """
+                                echo '===== Building JAR ====='
+                                cd src/javaapp-standalone
+                                mvn -Dmaven.test.skip=true clean package
+                                echo '===== Target Directory ====='
+                                ls -la target
+                            """
+                        }
+                    }
+                }
+
+                /* ------------------------------
+                   KANIKO: Build & Push Image
+                   ------------------------------ */
+                stage("Build Docker Image (Kaniko)") {
+                    steps {
+                        container("kaniko") {
+                            sh """
+                                echo '===== Building Docker Image with Kaniko ====='
+
+                                /kaniko/executor \
+                                  --dockerfile=src/javaapp-standalone/Dockerfile \
+                                  --context=/home/jenkins/agent/workspace/${JOB_NAME}/src/javaapp-standalone \
+                                  --destination=${FULL_IMAGE} \
+                                  --verbosity=info
+                            """
+                        }
+                    }
+                }
+
+                /* ------------------------------
+                   HELM DEPLOY TO K8S
+                   ------------------------------ */
+                stage("Deploy to Kubernetes") {
+                    steps {
+                        container("helm") {
+                            sh """
+                                echo '===== Deploying Using Helm ====='
+                                helm upgrade --install ${RELEASE_NAME} src/javaapp-standalone/chart/my-java-app \
+                                  --namespace ${K8S_NAMESPACE} \
+                                  --set image.repository=docker.io/${IMAGE_REPO} \
+                                  --set image.tag=${IMAGE_TAG}
+                            """
+                        }
+                    }
                 }
             }
         }
@@ -121,10 +155,10 @@ spec:
 
     post {
         success {
-            echo "✅ CI/CD Pipeline Completed Successfully!"
+            echo "🎉 SUCCESS — Deployed version ${IMAGE_TAG}"
         }
         failure {
-            echo "❌ Pipeline Failed — Check Logs"
+            echo "❌ FAILURE — Check logs"
         }
     }
 }
