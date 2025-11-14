@@ -20,15 +20,8 @@ pipeline {
             }
         }
 
-        stage('Build Java App') {
-            steps {
-                dir('javaapp-standalone') {
-                    sh 'mvn clean package -DskipTests'
-                }
-            }
-        }
+        stage('Build & Build Image with Kaniko') {
 
-        stage('Build Image with Kaniko') {
             agent {
                 kubernetes {
                     yaml """
@@ -36,13 +29,25 @@ apiVersion: v1
 kind: Pod
 spec:
   containers:
+
+  - name: builder
+    image: maven:3.9.6-eclipse-temurin-21
+    command: ['sleep']
+    args: ['999999']
+    volumeMounts:
+    - name: workspace
+      mountPath: /home/jenkins/agent
+
   - name: kaniko
     image: gcr.io/kaniko-project/executor:debug
-    command: ["sleep"]
-    args: ["999999"]
+    command: ['sleep']
+    args: ['999999']
     volumeMounts:
     - name: docker-config
       mountPath: /kaniko/.docker/
+    - name: workspace
+      mountPath: /home/jenkins/agent
+
   volumes:
   - name: docker-config
     secret:
@@ -50,17 +55,35 @@ spec:
       items:
       - key: .dockerconfigjson
         path: config.json
+
+  - name: workspace
+    emptyDir: {}
 """
                 }
             }
+
             steps {
-                container('kaniko') {
-                    sh """
-                    /kaniko/executor \
-                      --dockerfile=javaapp-standalone/Dockerfile \
-                      --context=`pwd`/javaapp-standalone \
-                      --destination=docker.io/${IMAGE_REPO}:${IMAGE_TAG}
-                    """
+                script {
+
+                    echo "🧱 Building Java JAR inside the pod..."
+
+                    container('builder') {
+                        sh """
+                            cd javaapp-standalone
+                            mvn clean package -DskipTests
+                        """
+                    }
+
+                    echo "📦 Building Docker Image with Kaniko..."
+
+                    container('kaniko') {
+                        sh """
+                            /kaniko/executor \
+                              --dockerfile=javaapp-standalone/Dockerfile \
+                              --context=`pwd` \
+                              --destination=docker.io/${IMAGE_REPO}:${IMAGE_TAG}
+                        """
+                    }
                 }
             }
         }
@@ -68,11 +91,10 @@ spec:
         stage('Deploy to Kubernetes via Helm') {
             steps {
                 script {
-
                     sh """
                         kubectl get ns ${K8S_NAMESPACE} || kubectl create ns ${K8S_NAMESPACE}
 
-                        helm upgrade --install ${RELEASE_NAME} ./javaapp-standalone/chart/my-java-app \
+                        helm upgrade --install ${RELEASE_NAME} javaapp-standalone/chart/my-java-app \
                           --namespace ${K8S_NAMESPACE} \
                           --set image.repository=docker.io/${IMAGE_REPO} \
                           --set image.tag=${IMAGE_TAG}
@@ -84,10 +106,10 @@ spec:
 
     post {
         success {
-            echo "🚀 Deployment Successful! Version ${IMAGE_TAG}"
+            echo "🎉 Deployment Successful! Image version ${IMAGE_TAG}"
         }
         failure {
-            echo "❌ Deployment failed. Check logs!"
+            echo "❌ Deployment Failed. Check logs!"
         }
     }
 }
