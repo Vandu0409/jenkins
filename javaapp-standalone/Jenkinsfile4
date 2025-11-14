@@ -1,23 +1,8 @@
 pipeline {
 
-    agent none
-
-    environment {
-        DOCKERHUB_USER = "vandu0409"
-        IMAGE_REPO     = "vandu0409/javaapp"
-        IMAGE_TAG      = "${BUILD_NUMBER}"
-
-        K8S_NAMESPACE  = "javaapp"
-        RELEASE_NAME   = "javaapp"
-    }
-
-    stages {
-
-        stage("Build, Image & Deploy (Single Pod)") {
-
-            agent {
-                kubernetes {
-                    yaml """
+  agent {
+    kubernetes {
+      yaml """
 apiVersion: v1
 kind: Pod
 spec:
@@ -52,7 +37,6 @@ spec:
   volumes:
   - name: workspace
     emptyDir: {}
-
   - name: docker-config
     secret:
       secretName: regcred
@@ -60,60 +44,65 @@ spec:
       - key: .dockerconfigjson
         path: config.json
 """
-                }
-            }
-
-            steps {
-
-                script {
-
-                    echo "===== CLONE REPOSITORY INSIDE BUILDER ====="
-
-                    container('builder') {
-                        sh """
-                            cd /home/jenkins/agent
-                            rm -rf jenkins
-                            git clone -b k8s-jenkins https://github.com/Vandu0409/jenkins.git
-                            ls -la /home/jenkins/agent
-                        """
-                    }
-
-                    echo "===== BUILD JAR ====="
-
-                    container('builder') {
-                        sh """
-                            cd /home/jenkins/agent/jenkins/javaapp-standalone
-                            mvn clean package -DskipTests
-                            ls -la target
-                        """
-                    }
-
-                    echo "===== BUILD DOCKER IMAGE USING KANIKO ====="
-
-                    container('kaniko') {
-                        sh """
-                            cd /home/jenkins/agent/jenkins
-                            /kaniko/executor \
-                              --dockerfile=javaapp-standalone/Dockerfile \
-                              --context=/home/jenkins/agent/jenkins \
-                              --destination=docker.io/${IMAGE_REPO}:${IMAGE_TAG}
-                        """
-                    }
-
-                    echo "===== DEPLOY WITH HELM ====="
-
-                    container('helm') {
-                        sh """
-                            helm upgrade --install ${RELEASE_NAME} \
-                            /home/jenkins/agent/jenkins/javaapp-standalone/chart/my-java-app \
-                              --namespace ${K8S_NAMESPACE} \
-                              --create-namespace \
-                              --set image.repository=docker.io/${IMAGE_REPO} \
-                              --set image.tag=${IMAGE_TAG}
-                        """
-                    }
-                }
-            }
-        }
     }
+  }
+
+  environment {
+    DOCKERHUB_USER = "vandu0409"
+    IMAGE_REPO     = "vandu0409/javaapp"
+    IMAGE_TAG      = "${BUILD_NUMBER}"
+  }
+
+  stages {
+
+    stage("Clone Repository Inside Builder") {
+      steps {
+        container('builder') {
+          sh """
+            echo "===== CLONING CODE INSIDE POD ====="
+            git clone -b k8s-jenkins https://github.com/Vandu0409/jenkins.git repo
+            ls -la repo
+          """
+        }
+      }
+    }
+
+    stage("Build JAR") {
+      steps {
+        container('builder') {
+          sh """
+            cd repo/javaapp-standalone
+            mvn clean package -DskipTests
+            ls -la target
+          """
+        }
+      }
+    }
+
+    stage("Build Docker Image (Kaniko)") {
+      steps {
+        container('kaniko') {
+          sh """
+            /kaniko/executor \
+              --dockerfile=repo/javaapp-standalone/Dockerfile \
+              --context=`pwd`/repo/javaapp-standalone \
+              --destination=docker.io/${IMAGE_REPO}:${IMAGE_TAG}
+          """
+        }
+      }
+    }
+
+    stage("Deploy to Kubernetes") {
+      steps {
+        container('helm') {
+          sh """
+            helm upgrade --install javaapp repo/javaapp-standalone/chart/my-java-app \
+              --namespace javaapp \
+              --set image.repository=docker.io/${IMAGE_REPO} \
+              --set image.tag=${IMAGE_TAG}
+          """
+        }
+      }
+    }
+  }
 }
