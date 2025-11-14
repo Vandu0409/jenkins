@@ -8,7 +8,19 @@ pipeline {
 apiVersion: v1
 kind: Pod
 spec:
+  volumes:
+  - name: workspace
+    emptyDir: {}
+
+  - name: docker-config
+    secret:
+      secretName: regcred
+      items:
+      - key: .dockerconfigjson
+        path: config.json
+
   containers:
+
   - name: builder
     image: maven:3.9.6-eclipse-temurin-21
     command: ["cat"]
@@ -34,16 +46,6 @@ spec:
     volumeMounts:
     - name: workspace
       mountPath: /home/jenkins/agent
-
-  volumes:
-  - name: workspace
-    emptyDir: {}
-  - name: docker-config
-    secret:
-      secretName: regcred
-      items:
-      - key: .dockerconfigjson
-        path: config.json
 """
         }
     }
@@ -63,13 +65,8 @@ spec:
                 container('builder') {
                     sh """
                         set -x
-                        echo "📥 Cleaning workspace..."
                         rm -rf ./*
-
-                        echo "📥 Cloning from branch: k8s-jenkins"
                         git clone -b k8s-jenkins https://github.com/Vandu0409/jenkins.git .
-
-                        echo "📁 Listing workspace"
                         ls -la
                     """
                 }
@@ -81,40 +78,33 @@ spec:
                 container('builder') {
                     sh """
                         set -x
-                        echo "🔧 Running Maven build"
                         cd javaapp-standalone
                         mvn clean package -DskipTests
-
-                        echo "📦 Target:"
                         ls -l target
                     """
                 }
             }
         }
 
-        stage('Build Docker Image (Kaniko)') {
+        stage('Build Docker Image') {
             steps {
                 container('kaniko') {
                     sh """
                         set -x
-                        echo "🐳 Building Docker image using Kaniko"
-
                         /kaniko/executor \
-                          --dockerfile=javaapp-standalone/Dockerfile \
-                          --context=`pwd`/javaapp-standalone \
-                          --destination=docker.io/${IMAGE_REPO}:${IMAGE_TAG}
+                            --dockerfile=javaapp-standalone/Dockerfile \
+                            --context=`pwd`/javaapp-standalone \
+                            --destination=docker.io/${IMAGE_REPO}:${IMAGE_TAG}
                     """
                 }
             }
         }
 
-        stage('Deploy to Kubernetes (Helm)') {
+        stage('Deploy to K8s') {
             steps {
                 container('helm') {
                     sh """
                         set -x
-                        echo "🚀 Deploying via Helm"
-
                         helm upgrade --install ${RELEASE_NAME} javaapp-standalone/chart/my-java-app \
                             --namespace ${K8S_NAMESPACE} \
                             --set image.repository=docker.io/${IMAGE_REPO} \
@@ -123,10 +113,5 @@ spec:
                 }
             }
         }
-    }
-
-    post {
-        success { echo "🎉 SUCCESS! VERSION = ${IMAGE_TAG}" }
-        failure { echo "❌ FAILED! Check logs" }
     }
 }
