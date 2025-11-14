@@ -55,16 +55,9 @@ spec:
 
   - name: jnlp
     image: jenkins/inbound-agent:latest
-    args: ["-url", "http://jenkins.jenkins.svc.cluster.local:8080"]
-    env:
-    - name: JENKINS_SECRET
-      value: "${env.JENKINS_SECRET}"
-    - name: JENKINS_AGENT_NAME
-      value: "${env.JENKINS_AGENT_NAME}"
     volumeMounts:
     - name: workspace
       mountPath: /home/jenkins/agent
-
 
   volumes:
   - name: workspace
