@@ -13,6 +13,14 @@ pipeline {
 
     stages {
 
+        stage('Checkout Code') {
+            agent any
+            steps {
+                git branch: 'k8s-jenkins',
+                    url: 'https://github.com/Vandu0409/jenkins.git'
+            }
+        }
+
         stage('Build & Kaniko in Same Pod') {
 
             agent {
@@ -57,19 +65,19 @@ spec:
 
             steps {
 
-                echo "📥 Checking out code..."
-                checkout scm
+                echo "🧱 Building Java App inside builder container..."
 
-                echo "🧱 Building Java App inside the POD..."
                 container('builder') {
                     sh """
                         cd javaapp-standalone
                         mvn clean package -DskipTests
-                        ls -lh target
+                        echo "📦 Contents of target directory:"
+                        ls -l target
                     """
                 }
 
-                echo "📦 Building Docker Image with Kaniko..."
+                echo "📦 Building Docker Image via Kaniko..."
+
                 container('kaniko') {
                     sh """
                         /kaniko/executor \
