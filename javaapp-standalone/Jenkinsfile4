@@ -22,6 +22,7 @@ apiVersion: v1
 kind: Pod
 spec:
   containers:
+
   - name: builder
     image: maven:3.9.6-eclipse-temurin-21
     command: ['cat']
@@ -51,6 +52,7 @@ spec:
   volumes:
   - name: workspace
     emptyDir: {}
+
   - name: docker-config
     secret:
       secretName: regcred
@@ -63,17 +65,21 @@ spec:
 
             steps {
 
-                stage("Clone Repository") {
+                script {
+
+                    echo "===== CLONE REPOSITORY INSIDE BUILDER ====="
+
                     container('builder') {
                         sh """
                             cd /home/jenkins/agent
+                            rm -rf jenkins
                             git clone -b k8s-jenkins https://github.com/Vandu0409/jenkins.git
-                            ls -la
+                            ls -la /home/jenkins/agent
                         """
                     }
-                }
 
-                stage("Build JAR") {
+                    echo "===== BUILD JAR ====="
+
                     container('builder') {
                         sh """
                             cd /home/jenkins/agent/jenkins/javaapp-standalone
@@ -81,9 +87,9 @@ spec:
                             ls -la target
                         """
                     }
-                }
 
-                stage("Build Docker Image (Kaniko)") {
+                    echo "===== BUILD DOCKER IMAGE USING KANIKO ====="
+
                     container('kaniko') {
                         sh """
                             cd /home/jenkins/agent/jenkins
@@ -93,9 +99,9 @@ spec:
                               --destination=docker.io/${IMAGE_REPO}:${IMAGE_TAG}
                         """
                     }
-                }
 
-                stage("Deploy to Kubernetes") {
+                    echo "===== DEPLOY WITH HELM ====="
+
                     container('helm') {
                         sh """
                             helm upgrade --install ${RELEASE_NAME} \
