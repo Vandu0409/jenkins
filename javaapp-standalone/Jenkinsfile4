@@ -27,6 +27,7 @@ spec:
   serviceAccountName: jenkins-admin
   containers:
 
+  # ---------------- MAVEN ----------------
   - name: maven
     image: maven:3.9.6-eclipse-temurin-21
     command: ["sleep"]
@@ -35,18 +36,21 @@ spec:
     - name: workspace
       mountPath: /home/jenkins/agent
 
+  # ---------------- KANIKO ----------------
   - name: kaniko
     image: gcr.io/kaniko-project/executor:v1.9.0-debug
     command: ["/busybox/sleep"]
     args: ["999999"]
-    securityContext:
-      runAsUser: 0     # <<<<<<<< REQUIRED FOR DOCKER AUTH
+    env:
+    - name: DOCKER_CONFIG
+      value: /kaniko/.docker
     volumeMounts:
     - name: workspace
       mountPath: /home/jenkins/agent
     - name: docker-config
       mountPath: /kaniko/.docker/
 
+  # ---------------- HELM ----------------
   - name: helm
     image: alpine/helm:3.11.2
     command: ["sleep"]
@@ -55,6 +59,7 @@ spec:
     - name: workspace
       mountPath: /home/jenkins/agent
 
+  # ---------------- JNLP ----------------
   - name: jnlp
     image: jenkins/inbound-agent:latest
     volumeMounts:
@@ -76,19 +81,20 @@ spec:
 
             stages {
 
-             stage("Clone Repo") {
-    steps {
-        container("maven") {
-            sh """
-                cd /home/jenkins/agent
-                git clone --branch k8s-jenkins https://github.com/Vandu0409/jenkins.git repo
-                ls -l repo
-            """
-        }
-    }
-}
+                # ----------- CLONE REPO -----------
+                stage("Clone Repo") {
+                    steps {
+                        container("maven") {
+                            sh """
+                                cd /home/jenkins/agent
+                                git clone --branch k8s-jenkins https://github.com/Vandu0409/jenkins.git repo
+                                ls -l repo
+                            """
+                        }
+                    }
+                }
 
-
+                # ----------- MAVEN BUILD -----------
                 stage("Build JAR") {
                     steps {
                         container("maven") {
@@ -101,20 +107,22 @@ spec:
                     }
                 }
 
+                # ----------- KANIKO BUILD + PUSH -----------
                 stage("Build Docker Image (Kaniko)") {
-                        steps {
-        container("kaniko") {
-            sh """
-                /kaniko/executor \
-                  --dockerfile=/home/jenkins/agent/repo/javaapp-standalone/Dockerfile \
-                  --context=/home/jenkins/agent/repo/javaapp-standalone \
-                  --destination=${FULL_IMAGE} \
-                  --docker-config=/kaniko/.docker/ \
-                  --single-snapshot
-            """
-        }
-    }
-}
+                    steps {
+                        container("kaniko") {
+                            sh """
+                                /kaniko/executor \
+                                  --dockerfile=/home/jenkins/agent/repo/javaapp-standalone/Dockerfile \
+                                  --context=/home/jenkins/agent/repo/javaapp-standalone \
+                                  --destination=${FULL_IMAGE} \
+                                  --single-snapshot
+                            """
+                        }
+                    }
+                }
+
+                # ----------- HELM DEPLOY -----------
                 stage("Deploy to Kubernetes") {
                     steps {
                         container("helm") {
