@@ -17,7 +17,7 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                git branch: 'master',
+                git branch: 'k8s-jenkinspod',
                     url: 'https://github.com/Vandu0409/jenkins.git'
             }
         }
@@ -74,7 +74,7 @@ pipeline {
 
     post {
         success {
-            echo "Ìæâ Deployment Successful! Java App deployed with tag ${IMAGE_TAG}"
+            echo "ÔøΩÔøΩÔøΩ Deployment Successful! Java App deployed with tag ${IMAGE_TAG}"
         }
         failure {
             echo "‚ùå Deployment Failed. Check logs!"
