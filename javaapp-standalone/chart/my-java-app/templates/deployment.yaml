@@ -15,18 +15,13 @@ spec:
         app: {{ include "my-java-app.fullname" . }}
     spec:
 
-      {{- if .Values.image.pullSecrets }}
-      imagePullSecrets:
-        {{- toYaml .Values.image.pullSecrets | nindent 8 }}
-      {{- end }}
-
       containers:
         - name: {{ include "my-java-app.name" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           ports:
-            - containerPort: {{ .Values.service.targetPort | default 8080 }}
+            - containerPort: 5000
 
           env:
             - name: APP_MESSAGE
@@ -34,6 +29,7 @@ spec:
                 configMapKeyRef:
                   name: {{ include "my-java-app.fullname" . }}-config
                   key: APP_MESSAGE
+
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -43,14 +39,14 @@ spec:
           readinessProbe:
             httpGet:
               path: /
-              port: {{ .Values.service.targetPort | default 8080 }}
+              port: 5000
             initialDelaySeconds: 10
             periodSeconds: 5
 
           livenessProbe:
             httpGet:
               path: /
-              port: {{ .Values.service.targetPort | default 8080 }}
+              port: 5000
             initialDelaySeconds: 30
             periodSeconds: 10
 
@@ -68,4 +64,3 @@ spec:
       tolerations:
         {{- toYaml .Values.tolerations | nindent 8 }}
       {{- end }}
-
