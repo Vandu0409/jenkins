@@ -2,13 +2,13 @@ replicaCount: 2
 
 image:
   repository: 905418283021.dkr.ecr.ap-south-1.amazonaws.com/javaapp
-  tag: ""     # Jenkins will set
+  tag: ""
   pullPolicy: IfNotPresent
 
 service:
   type: ClusterIP
-  port: 80          # ALB hits 80
-  targetPort: 5000  # App listens on 5000
+  port: 80
+  targetPort: 5000
 
 ingress:
   enabled: true
@@ -19,7 +19,7 @@ ingress:
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-south-1:905418283021:certificate/2aa7fd6f-8a09-4edc-8875-43bf4a044e08
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80,"HTTPS":443}]'
-    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
   hosts:
     - host: javaapp.vandana-java.shop
       paths:
@@ -28,4 +28,9 @@ ingress:
   tls: []
 
 resources: {}
-nodeSel
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
