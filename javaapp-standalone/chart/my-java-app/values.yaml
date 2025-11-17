@@ -1,16 +1,14 @@
 replicaCount: 2
 
 image:
-  repository: docker.io/vandu0409/javaapp   # ✅ Docker Hub repo
-  tag: ""                                     # tag is injected by Jenkins
+  repository: 905418283021.dkr.ecr.ap-south-1.amazonaws.com/javaapp
+  tag: ""     # Jenkins will set
   pullPolicy: IfNotPresent
-  pullSecrets:
-    - name: regcred                          # Your Docker Hub secret
 
 service:
   type: ClusterIP
-  port: 80
-  targetPort: 8080
+  port: 80          # ALB hits 80
+  targetPort: 5000  # App listens on 5000
 
 ingress:
   enabled: true
@@ -30,7 +28,4 @@ ingress:
   tls: []
 
 resources: {}
-nodeSelector: {}
-tolerations: []
-affinity: {}
-
+nodeSel
