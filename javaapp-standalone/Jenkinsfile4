@@ -8,7 +8,7 @@ pipeline {
         GIT_BRANCH    = "k8s-jenkins"
 
         // ---------- ECR SETTINGS ----------
-        AWS_ACCOUNT   = "197315783820"
+        AWS_ACCOUNT   = "905418283021"
         AWS_REGION    = "ap-south-1"
 
         IMAGE_REPO    = "${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/javaapp"
